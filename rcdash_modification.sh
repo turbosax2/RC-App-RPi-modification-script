@@ -108,7 +108,7 @@ configure_rc_boot_text() {
 
 configure_cmdline_quiet() {
     echo "Hiding Raspberry Pi boot text..."
-    sed -i 's/console=tty3/console=tty1/' /boot/firmware/cmdline.txt || true
+    sed -i 's/console=tty1/console=tty3/' /boot/firmware/cmdline.txt || true
     grep -q "loglevel=0" /boot/firmware/cmdline.txt || \
         sed -i 's/$/ loglevel=0 vt.global_cursor_default=0/' /boot/firmware/cmdline.txt
 }
