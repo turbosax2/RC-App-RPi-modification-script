@@ -10,6 +10,12 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 ############################################
+# Dependencies for UI
+############################################
+apt update -y
+apt install -y whiptail curl git
+
+############################################
 # Detect target user
 ############################################
 if [[ -n "$SUDO_USER" && "$SUDO_USER" != "root" ]]; then
@@ -21,65 +27,59 @@ fi
 TARGET_HOME=$(eval echo "~$TARGET_USER")
 
 ############################################
-# Feature flags (ENABLED by default)
+# Default feature flags (ENABLED)
 ############################################
-ENABLE_RC_HIDE=true
-ENABLE_BOOT_HIDE=true
-ENABLE_EXTRA_BOOT_HIDE=true
-ENABLE_SPLASH=true
-ENABLE_DISABLE_SERVICES=true
-ENABLE_WAVESHARE=true
-ENABLE_POWER_LED=true
+RC_HIDE=1
+BOOT_HIDE=1
+EXTRA_BOOT_HIDE=1
+SPLASH=1
+DISABLE_SERVICES=1
+WAVESHARE=1
+POWER_LED=1
 
-############################################
-# Menu helpers
-############################################
-toggle() {
-  [[ "$1" == true ]] && echo false || echo true
-}
-
-bool_status() {
-  [[ "$1" == true ]] && echo "ENABLED" || echo "DISABLED"
-}
-
-show_menu() {
-  clear
-  echo "======================================="
-  echo " Raspberry Pi Setup Configuration"
-  echo "======================================="
-  echo
-  echo "Detected user: $TARGET_USER"
-  echo
-  echo "1) Modify RC boot text           [$(bool_status $ENABLE_RC_HIDE)]"
-  echo "2) Hide RPi boot text            [$(bool_status $ENABLE_BOOT_HIDE)]"
-  echo "3) Extra boot text removal      [$(bool_status $ENABLE_EXTRA_BOOT_HIDE)]"
-  echo "4) Splash screen                 [$(bool_status $ENABLE_SPLASH)]"
-  echo "5) Disable services (faster boot)[$(bool_status $ENABLE_DISABLE_SERVICES)]"
-  echo "6) Waveshare display tweaks      [$(bool_status $ENABLE_WAVESHARE)]"
-  echo "7) Power button LED              [$(bool_status $ENABLE_POWER_LED)]"
-  echo
-  echo "a) Apply configuration"
-  echo "q) Quit without changes"
-  echo
+eval_setting() {
+  [[ "$1" -eq "$2" ]] && echo "ON" || echo "OFF"
 }
 
 ############################################
-# Menu loop
+# Feature selection menu
 ############################################
-while true; do
-  show_menu
-  read -rp "Select option: " choice
+APP_SELECTIONS=$(whiptail \
+  --title "RPi Setup Features" \
+  --notags \
+  --separate-output \
+  --checklist "Choose features to enable\nDetected user: $TARGET_USER" \
+  20 78 7 \
+  RC_HIDE          "Modify RC boot text"              $(eval_setting $RC_HIDE 1) \
+  BOOT_HIDE        "Hide Raspberry Pi boot text"      $(eval_setting $BOOT_HIDE 1) \
+  EXTRA_BOOT_HIDE  "Remove additional boot text"      $(eval_setting $EXTRA_BOOT_HIDE 1) \
+  SPLASH           "Splash screen setup"              $(eval_setting $SPLASH 1) \
+  DISABLE_SERVICES "Disable services (faster boot)"   $(eval_setting $DISABLE_SERVICES 1) \
+  WAVESHARE        "Waveshare display fixes"          $(eval_setting $WAVESHARE 1) \
+  POWER_LED        "Power button LED setup"           $(eval_setting $POWER_LED 1) \
+  3>&1 1>&2 2>&3
+)
 
-  case "$choice" in
-    1) ENABLE_RC_HIDE=$(toggle $ENABLE_RC_HIDE) ;;
-    2) ENABLE_BOOT_HIDE=$(toggle $ENABLE_BOOT_HIDE) ;;
-    3) ENABLE_EXTRA_BOOT_HIDE=$(toggle $ENABLE_EXTRA_BOOT_HIDE) ;;
-    4) ENABLE_SPLASH=$(toggle $ENABLE_SPLASH) ;;
-    5) ENABLE_DISABLE_SERVICES=$(toggle $ENABLE_DISABLE_SERVICES) ;;
-    6) ENABLE_WAVESHARE=$(toggle $ENABLE_WAVESHARE) ;;
-    7) ENABLE_POWER_LED=$(toggle $ENABLE_POWER_LED) ;;
-    a) break ;;
-    q) exit 0 ;;
+############################################
+# Reset flags, enable selected
+############################################
+RC_HIDE=0
+BOOT_HIDE=0
+EXTRA_BOOT_HIDE=0
+SPLASH=0
+DISABLE_SERVICES=0
+WAVESHARE=0
+POWER_LED=0
+
+for selection in $APP_SELECTIONS; do
+  case "$selection" in
+    RC_HIDE)          RC_HIDE=1 ;;
+    BOOT_HIDE)        BOOT_HIDE=1 ;;
+    EXTRA_BOOT_HIDE)  EXTRA_BOOT_HIDE=1 ;;
+    SPLASH)           SPLASH=1 ;;
+    DISABLE_SERVICES) DISABLE_SERVICES=1 ;;
+    WAVESHARE)        WAVESHARE=1 ;;
+    POWER_LED)        POWER_LED=1 ;;
   esac
 done
 
@@ -100,7 +100,7 @@ configure_cmdline_quiet() {
     sed -i 's/$/ loglevel=0 vt.global_cursor_default=0/' /boot/firmware/cmdline.txt
 }
 
-configure_getty_quiet() {
+configure_extra_boot_text() {
   echo "Removing additional boot text..."
   touch "$TARGET_HOME/.hushlogin"
 
@@ -118,7 +118,6 @@ EOF
 
 configure_splash() {
   echo "Setting up splash screen..."
-  apt update -y
   apt install -y feh
 
   cat <<EOF >"$TARGET_HOME/.xinitrc"
@@ -129,22 +128,21 @@ EOF
 }
 
 disable_services() {
-  echo "Disabling unneeded services..."
+  echo "Disabling services..."
   systemctl disable ModemManager bluetooth triggerhappy alsa-restore rp1-test glamor-test || true
 }
 
 configure_waveshare() {
-  echo "Applying Waveshare display fixes..."
+  echo "Applying Waveshare fixes..."
   mkdir -p "$TARGET_HOME/.kivy"
   sed -i 's/%(name)s = probesysfs/#&/' "$TARGET_HOME/.kivy/config.ini" || true
   grep -q "waveshare =" "$TARGET_HOME/.kivy/config.ini" || \
     echo "waveshare = hidinput,/dev/input/event1" >> "$TARGET_HOME/.kivy/config.ini"
-
   chown -R $TARGET_USER:$TARGET_USER "$TARGET_HOME/.kivy"
 }
 
 install_power_led() {
-  echo "Installing power button LED service..."
+  echo "Installing power button LED..."
   apt install -y python3-pip
   pip3 install rpi-ws281x adafruit-circuitpython-neopixel --break-system-packages
 
@@ -165,31 +163,31 @@ pixels = neopixel.NeoPixel(
     PIXEL_PIN, NUM_PIXELS, brightness=BRIGHTNESS, auto_write=False
 )
 
-shutdown_requested = False
+shutdown = False
 
-def fade(color, start, end):
-    step = (end - start) / FADE_STEPS
-    for i in range(FADE_STEPS + 1):
-        scale = start + step * i
-        pixels[0] = tuple(int(c * scale) for c in color)
-        pixels.show()
-        time.sleep(FADE_TIME / FADE_STEPS)
+def handle(sig, frame):
+    global shutdown
+    shutdown = True
 
-def handle_shutdown(signum, frame):
-    global shutdown_requested
-    shutdown_requested = True
+signal.signal(signal.SIGTERM, handle)
+signal.signal(signal.SIGINT, handle)
 
-signal.signal(signal.SIGTERM, handle_shutdown)
-signal.signal(signal.SIGINT, handle_shutdown)
+def fade(scale):
+    pixels[0] = tuple(int(c * scale) for c in TARGET_COLOR)
+    pixels.show()
 
-fade(TARGET_COLOR, 0, 1)
+for i in range(FADE_STEPS + 1):
+    fade(i / FADE_STEPS)
+    time.sleep(FADE_TIME / FADE_STEPS)
 
 try:
-    while not shutdown_requested:
+    while not shutdown:
         time.sleep(0.2)
 finally:
-    fade(TARGET_COLOR, 1, 0)
-    pixels.fill((0, 0, 0))
+    for i in range(FADE_STEPS, -1, -1):
+        fade(i / FADE_STEPS)
+        time.sleep(FADE_TIME / FADE_STEPS)
+    pixels.fill((0,0,0))
     pixels.show()
     sys.exit(0)
 EOF
@@ -198,7 +196,7 @@ EOF
 
   cat <<EOF >/etc/systemd/system/chromatek_led.service
 [Unit]
-Description=ChromaTek Power Switch LED control
+Description=ChromaTek Power Button LED
 After=multi-user.target
 
 [Service]
@@ -217,18 +215,18 @@ EOF
 }
 
 ############################################
-# Apply configuration
+# Apply selected features
 ############################################
-$ENABLE_RC_HIDE && configure_rc_boot_text
-$ENABLE_BOOT_HIDE && configure_cmdline_quiet
-$ENABLE_EXTRA_BOOT_HIDE && configure_getty_quiet
-$ENABLE_SPLASH && configure_splash
-$ENABLE_DISABLE_SERVICES && disable_services
-$ENABLE_WAVESHARE && configure_waveshare
-$ENABLE_POWER_LED && install_power_led
+[[ $RC_HIDE -eq 1 ]]         && configure_rc_boot_text
+[[ $BOOT_HIDE -eq 1 ]]       && configure_cmdline_quiet
+[[ $EXTRA_BOOT_HIDE -eq 1 ]] && configure_extra_boot_text
+[[ $SPLASH -eq 1 ]]          && configure_splash
+[[ $DISABLE_SERVICES -eq 1 ]]&& disable_services
+[[ $WAVESHARE -eq 1 ]]       && configure_waveshare
+[[ $POWER_LED -eq 1 ]]       && install_power_led
 
-echo
-echo "======================================="
-echo " Setup complete."
-echo " Reboot recommended."
-echo "======================================="
+############################################
+# Done
+############################################
+whiptail --title "Setup Complete" --msgbox \
+"Setup finished successfully.\n\nA reboot is recommended." 10 60
