@@ -12,8 +12,8 @@ fi
 ############################################
 # Dependencies for UI
 ############################################
-apt update -y
-apt install -y whiptail curl git
+#apt update -y
+#apt install -y whiptail curl git
 
 ############################################
 # Detect target user
