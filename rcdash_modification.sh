@@ -131,10 +131,23 @@ EOF
 
 configure_splash() {
     echo "Setting up splash screen..."
-    cat <<EOF >"$TARGET_HOME/.xinitrc"
-feh --fullscreen --hide-pointer --auto-zoom $TARGET_HOME/splash.png &
-EOF
-    chown $TARGET_USER:$TARGET_USER "$TARGET_HOME/.xinitrc"
+
+    # Target file that contains the x11vnc line
+    local file="$TARGET_HOME/.xinitrc"
+
+    # Ensure the file exists
+    if [ ! -f "$file" ]; then
+        echo "ERROR: $file not found"; return 1
+    fi
+
+    # Remove any existing 'feh ... splash.png &' line to avoid duplicates (idempotent)
+    sed -i '/^[[:space:]]*feh[[:space:]]\+--fullscreen[[:space:]]\+--hide-pointer[[:space:]]\+--auto-zoom[[:space:]]\+.*\/splash\.png[[:space:]]*&[[:space:]]*$/d' "$file"
+
+    # Insert the feh line directly ABOVE the x11vnc line
+    sed -i '/^[[:space:]]*x11vnc[[:space:]]/i feh --fullscreen --hide-pointer --auto-zoom '"$TARGET_HOME"'/splash.png &' "$file"
+
+    # Ownership (match your original style)
+    chown $TARGET_USER:$TARGET_USER "$file"
 }
 
 disable_services() {
