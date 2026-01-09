@@ -102,7 +102,7 @@ setup_packages() {
 
 configure_rc_boot_text() {
     echo "Configuring RC boot text..."
-    echo $TARGET_HOME
+    #echo $TARGET_HOME
     echo "HI"
     sed -i 's/^echo "Starting RaceCapture!"/#&/' "$TARGET_HOME/.bashrc" || true
     sed -i 's|^xinit .*|xinit -- -nocursor -dpms -s 0 >/dev/null 2>&1|' "$TARGET_HOME/.bashrc" || true
