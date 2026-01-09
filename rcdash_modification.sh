@@ -20,11 +20,8 @@ fi
 TARGET_HOME=$(eval echo "~$TARGET_USER")
 
 ############################################
-# Default options
+# Default feature flags
 ############################################
-MODE="X11"
-ENABLE_VNC=1
-
 RC_HIDE=1
 BOOT_HIDE=1
 EXTRA_BOOT_HIDE=1
@@ -71,30 +68,32 @@ for selection in $APP_SELECTIONS; do
 done
 
 ############################################
-# Package installation function
+# Package installation function (dynamic)
 ############################################
 setup_packages() {
-    echo "Installing necessary packages..."
+    echo "Installing packages required for selected features..."
+    PACKAGES_TO_INSTALL=""
 
-    BASE_PACKAGES="mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount pv python3-gpiozero jq"
-    X11_PACKAGES="xserver-xorg xserver-xorg-legacy xinit gldriver-test"
-    VNC_PACKAGES="x11vnc"
-
-    PACKAGES_TO_INSTALL="${BASE_PACKAGES}"
-
-    if [[ $MODE == "X11" ]]; then
-        PACKAGES_TO_INSTALL+=" ${X11_PACKAGES}"
-        if [[ $ENABLE_VNC == "1" ]]; then
-            PACKAGES_TO_INSTALL+=" ${VNC_PACKAGES}"
-        fi
+    # Splash screen requires feh
+    if [[ $SPLASH -eq 1 ]]; then
+        PACKAGES_TO_INSTALL+=" feh"
     fi
 
-    # Fix interrupted installs first
+    # Power button LED requires python3-pip
+    if [[ $POWER_LED -eq 1 ]]; then
+        PACKAGES_TO_INSTALL+=" python3-pip"
+    fi
+
+    # Fix any interrupted installs first
     dpkg --configure -a || true
     apt -f install -y || true
 
-    apt update -y
-    apt install -y $PACKAGES_TO_INSTALL
+    if [[ -n "$PACKAGES_TO_INSTALL" ]]; then
+        apt update -y
+        apt install -y $PACKAGES_TO_INSTALL
+    else
+        echo "No packages need to be installed for selected features."
+    fi
 }
 
 ############################################
@@ -208,7 +207,7 @@ EOF
 }
 
 ############################################
-# Run all
+# Run everything
 ############################################
 setup_packages
 
