@@ -10,12 +10,6 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 ############################################
-# Dependencies for UI
-############################################
-#apt update -y
-#apt install -y whiptail curl git
-
-############################################
 # Detect target user
 ############################################
 if [[ -n "$SUDO_USER" && "$SUDO_USER" != "root" ]]; then
@@ -23,12 +17,14 @@ if [[ -n "$SUDO_USER" && "$SUDO_USER" != "root" ]]; then
 else
   TARGET_USER=$(getent passwd 1000 | cut -d: -f1)
 fi
-
 TARGET_HOME=$(eval echo "~$TARGET_USER")
 
 ############################################
-# Default feature flags (ENABLED)
+# Default options
 ############################################
+MODE="X11"
+ENABLE_VNC=1
+
 RC_HIDE=1
 BOOT_HIDE=1
 EXTRA_BOOT_HIDE=1
@@ -60,17 +56,8 @@ APP_SELECTIONS=$(whiptail \
   3>&1 1>&2 2>&3
 )
 
-############################################
-# Reset flags, enable selected
-############################################
-RC_HIDE=0
-BOOT_HIDE=0
-EXTRA_BOOT_HIDE=0
-SPLASH=0
-DISABLE_SERVICES=0
-WAVESHARE=0
-POWER_LED=0
-
+# Reset all to 0, enable selected
+RC_HIDE=0; BOOT_HIDE=0; EXTRA_BOOT_HIDE=0; SPLASH=0; DISABLE_SERVICES=0; WAVESHARE=0; POWER_LED=0
 for selection in $APP_SELECTIONS; do
   case "$selection" in
     RC_HIDE)          RC_HIDE=1 ;;
@@ -84,71 +71,93 @@ for selection in $APP_SELECTIONS; do
 done
 
 ############################################
+# Package installation function
+############################################
+setup_packages() {
+    echo "Installing necessary packages..."
+
+    BASE_PACKAGES="mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount pv python3-gpiozero jq"
+    X11_PACKAGES="xserver-xorg xserver-xorg-legacy xinit gldriver-test"
+    VNC_PACKAGES="x11vnc"
+
+    PACKAGES_TO_INSTALL="${BASE_PACKAGES}"
+
+    if [[ $MODE == "X11" ]]; then
+        PACKAGES_TO_INSTALL+=" ${X11_PACKAGES}"
+        if [[ $ENABLE_VNC == "1" ]]; then
+            PACKAGES_TO_INSTALL+=" ${VNC_PACKAGES}"
+        fi
+    fi
+
+    # Fix interrupted installs first
+    dpkg --configure -a || true
+    apt -f install -y || true
+
+    apt update -y
+    apt install -y $PACKAGES_TO_INSTALL
+}
+
+############################################
 # Feature implementations
 ############################################
 
 configure_rc_boot_text() {
-  echo "Configuring RC boot text..."
-  sed -i 's/^echo "Starting RaceCapture!"/#&/' "$TARGET_HOME/.bashrc" || true
-  sed -i 's|^xinit .*|xinit -- -nocursor -dpms -s 0 >/dev/null 2>&1|' "$TARGET_HOME/.bashrc" || true
+    echo "Configuring RC boot text..."
+    sed -i 's/^echo "Starting RaceCapture!"/#&/' "$TARGET_HOME/.bashrc" || true
+    sed -i 's|^xinit .*|xinit -- -nocursor -dpms -s 0 >/dev/null 2>&1|' "$TARGET_HOME/.bashrc" || true
 }
 
 configure_cmdline_quiet() {
-  echo "Hiding Raspberry Pi boot text..."
-  sed -i 's/console=tty3/console=tty1/' /boot/firmware/cmdline.txt || true
-  grep -q "loglevel=0" /boot/firmware/cmdline.txt || \
-    sed -i 's/$/ loglevel=0 vt.global_cursor_default=0/' /boot/firmware/cmdline.txt
+    echo "Hiding Raspberry Pi boot text..."
+    sed -i 's/console=tty3/console=tty1/' /boot/firmware/cmdline.txt || true
+    grep -q "loglevel=0" /boot/firmware/cmdline.txt || \
+        sed -i 's/$/ loglevel=0 vt.global_cursor_default=0/' /boot/firmware/cmdline.txt
 }
 
 configure_extra_boot_text() {
-  echo "Removing additional boot text..."
-  touch "$TARGET_HOME/.hushlogin"
+    echo "Removing additional boot text..."
+    touch "$TARGET_HOME/.hushlogin"
 
-  mkdir -p /etc/systemd/system/getty@tty1.service.d
-  cat <<EOF >/etc/systemd/system/getty@tty1.service.d/noclear.conf
+    mkdir -p /etc/systemd/system/getty@tty1.service.d
+    cat <<EOF >/etc/systemd/system/getty@tty1.service.d/noclear.conf
 [Service]
 TTYVTDisallocate=no
 ExecStart=
 ExecStart=-/sbin/agetty --noclear --skip-login --nonewline --noissue --autologin $TARGET_USER --noclear %I \$TERM
 EOF
 
-  systemctl daemon-reexec
-  systemctl daemon-reload
+    systemctl daemon-reexec
+    systemctl daemon-reload
 }
 
 configure_splash() {
-  echo "Setting up splash screen..."
-  apt install -y feh
-
-  cat <<EOF >"$TARGET_HOME/.xinitrc"
+    echo "Setting up splash screen..."
+    cat <<EOF >"$TARGET_HOME/.xinitrc"
 feh --fullscreen --hide-pointer --auto-zoom $TARGET_HOME/splash.png &
 EOF
-
-  chown $TARGET_USER:$TARGET_USER "$TARGET_HOME/.xinitrc"
+    chown $TARGET_USER:$TARGET_USER "$TARGET_HOME/.xinitrc"
 }
 
 disable_services() {
-  echo "Disabling services..."
-  systemctl disable ModemManager bluetooth triggerhappy alsa-restore rp1-test glamor-test || true
+    echo "Disabling services..."
+    systemctl disable ModemManager bluetooth triggerhappy alsa-restore rp1-test glamor-test || true
 }
 
 configure_waveshare() {
-  echo "Applying Waveshare fixes..."
-  mkdir -p "$TARGET_HOME/.kivy"
-  sed -i 's/%(name)s = probesysfs/#&/' "$TARGET_HOME/.kivy/config.ini" || true
-  grep -q "waveshare =" "$TARGET_HOME/.kivy/config.ini" || \
-    echo "waveshare = hidinput,/dev/input/event1" >> "$TARGET_HOME/.kivy/config.ini"
-  chown -R $TARGET_USER:$TARGET_USER "$TARGET_HOME/.kivy"
+    echo "Applying Waveshare fixes..."
+    mkdir -p "$TARGET_HOME/.kivy"
+    sed -i 's/%(name)s = probesysfs/#&/' "$TARGET_HOME/.kivy/config.ini" || true
+    grep -q "waveshare =" "$TARGET_HOME/.kivy/config.ini" || \
+        echo "waveshare = hidinput,/dev/input/event1" >> "$TARGET_HOME/.kivy/config.ini"
+    chown -R $TARGET_USER:$TARGET_USER "$TARGET_HOME/.kivy"
 }
 
 install_power_led() {
-  echo "Installing power button LED..."
-  apt install -y python3-pip
-  pip3 install rpi-ws281x adafruit-circuitpython-neopixel --break-system-packages
+    echo "Installing power button LED..."
+    pip3 install --no-input rpi-ws281x adafruit-circuitpython-neopixel --break-system-packages
 
-  mkdir -p "$TARGET_HOME/scripts"
-
-  cat <<'EOF' >"$TARGET_HOME/scripts/chromatek_led.py"
+    mkdir -p "$TARGET_HOME/scripts"
+    cat <<'EOF' >"$TARGET_HOME/scripts/chromatek_led.py"
 #!/usr/bin/env python3
 import time, signal, sys, board, neopixel
 
@@ -159,42 +168,26 @@ TARGET_COLOR = (0, 184, 224)
 FADE_TIME = 1.0
 FADE_STEPS = 50
 
-pixels = neopixel.NeoPixel(
-    PIXEL_PIN, NUM_PIXELS, brightness=BRIGHTNESS, auto_write=False
-)
+pixels = neopixel.NeoPixel(PIXEL_PIN, NUM_PIXELS, brightness=BRIGHTNESS, auto_write=False)
+shutdown=False
 
-shutdown = False
-
-def handle(sig, frame):
-    global shutdown
-    shutdown = True
-
+def handle(sig, frame): global shutdown; shutdown=True
 signal.signal(signal.SIGTERM, handle)
 signal.signal(signal.SIGINT, handle)
 
-def fade(scale):
-    pixels[0] = tuple(int(c * scale) for c in TARGET_COLOR)
-    pixels.show()
+def fade(scale): pixels[0]=tuple(int(c*scale) for c in TARGET_COLOR); pixels.show()
 
-for i in range(FADE_STEPS + 1):
-    fade(i / FADE_STEPS)
-    time.sleep(FADE_TIME / FADE_STEPS)
-
+for i in range(FADE_STEPS+1): fade(i/FADE_STEPS); time.sleep(FADE_TIME/FADE_STEPS)
 try:
-    while not shutdown:
-        time.sleep(0.2)
+    while not shutdown: time.sleep(0.2)
 finally:
-    for i in range(FADE_STEPS, -1, -1):
-        fade(i / FADE_STEPS)
-        time.sleep(FADE_TIME / FADE_STEPS)
-    pixels.fill((0,0,0))
-    pixels.show()
-    sys.exit(0)
+    for i in range(FADE_STEPS,-1,-1): fade(i/FADE_STEPS); time.sleep(FADE_TIME/FADE_STEPS)
+    pixels.fill((0,0,0)); pixels.show(); sys.exit(0)
 EOF
 
-  chmod +x "$TARGET_HOME/scripts/chromatek_led.py"
+    chmod +x "$TARGET_HOME/scripts/chromatek_led.py"
 
-  cat <<EOF >/etc/systemd/system/chromatek_led.service
+    cat <<EOF >/etc/systemd/system/chromatek_led.service
 [Unit]
 Description=ChromaTek Power Button LED
 After=multi-user.target
@@ -209,14 +202,16 @@ KillSignal=SIGTERM
 WantedBy=multi-user.target
 EOF
 
-  systemctl daemon-reload
-  systemctl enable chromatek_led
-  systemctl start chromatek_led
+    systemctl daemon-reload
+    systemctl enable chromatek_led
+    systemctl start chromatek_led
 }
 
 ############################################
-# Apply selected features
+# Run all
 ############################################
+setup_packages
+
 [[ $RC_HIDE -eq 1 ]]         && configure_rc_boot_text
 [[ $BOOT_HIDE -eq 1 ]]       && configure_cmdline_quiet
 [[ $EXTRA_BOOT_HIDE -eq 1 ]] && configure_extra_boot_text
@@ -225,8 +220,4 @@ EOF
 [[ $WAVESHARE -eq 1 ]]       && configure_waveshare
 [[ $POWER_LED -eq 1 ]]       && install_power_led
 
-############################################
-# Done
-############################################
-whiptail --title "Setup Complete" --msgbox \
-"Setup finished successfully.\n\nA reboot is recommended." 10 60
+whiptail --title "Setup Complete" --msgbox "Setup finished successfully.\nA reboot is recommended." 10 60
