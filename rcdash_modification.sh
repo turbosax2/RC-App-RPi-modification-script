@@ -101,9 +101,9 @@ setup_packages() {
 ############################################
 
 configure_rc_boot_text() {
-    echo "Configuring RC boot text..."
-    sed -i '/^if shopt -q login_shell; then/,/fi/ s/^\([[:space:]]*echo[[:space:]]\+"Starting RaceCapture!"\)/# \1/' "$TARGET_HOME/.bashrc" || true
-    sed -i '/^if shopt -q login_shell; then/,/fi/ s|^\([[:space:]]*\)xinit .*|\1xinit -- -nocursor -dpms -s 0 >/dev/null 2>\&1| "$TARGET_HOME/.bashrc" || true
+  echo "Configuring RC boot text..."
+  sed -i '/^if shopt -q login_shell; then/,/fi/ s/^\([[:space:]]*echo[[:space:]]\+"Starting RaceCapture!"\)/# \1/' "$TARGET_HOME/.bashrc" || true
+  sed -i '/^if shopt -q login_shell; then/,/fi/ s|^\([[:space:]]*\)xinit -- -nocursor -dpms -s 0[[:space:]]*$|\1xinit -- -nocursor -dpms -s 0 >/dev/null 2>\&1|' "$TARGET_HOME/.bashrc" || true
 }
 
 configure_cmdline_quiet() {
