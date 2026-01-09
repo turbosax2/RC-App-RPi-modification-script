@@ -146,7 +146,8 @@ configure_waveshare() {
   echo "Applying Waveshare fixes..."
   mkdir -p "$TARGET_HOME/.kivy"
   touch "$TARGET_HOME/.kivy/config.ini"
-
+  echo "sup"
+  sed -i '/^\[input\]/,/^\[/{ s/^\([[:space:]]*\)%(name)s[[:space:]]*=[[:space:]]*probesysfs[[:space:]]*$/\1#%(name)s = probesysfs/ }' "$TARGET_HOME/.kivy/config.ini"
   grep -qE '^[[:space:]]*waveshare[[:space:]]*=' "$TARGET_HOME/.kivy/config.ini" || \
   sed -i '/^#%(name)s[[:space:]]*=[[:space:]]*probesysfs$/a waveshare = hidinput,/dev/input/event1' "$TARGET_HOME/.kivy/config.ini"
 
