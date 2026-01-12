@@ -157,13 +157,81 @@ disable_services() {
 
 configure_waveshare() {
   echo "Applying Waveshare fixes..."
+
+  # -----------------------------
+  # 1) Kivy touch mapping
+  # This fixes the issue of the hamburger menu button not working on boot
+  # -----------------------------
   mkdir -p "$TARGET_HOME/.kivy"
   touch "$TARGET_HOME/.kivy/config.ini"
   sed -i '/^\[input\]/,/^\[/{ s/^\([[:space:]]*\)%(name)s[[:space:]]*=[[:space:]]*probesysfs[[:space:]]*$/\1#%(name)s = probesysfs/ }' "$TARGET_HOME/.kivy/config.ini"
   grep -qE '^[[:space:]]*waveshare[[:space:]]*=' "$TARGET_HOME/.kivy/config.ini" || \
-  sed -i '/^#%(name)s[[:space:]]*=[[:space:]]*probesysfs$/a waveshare = hidinput,/dev/input/event1' "$TARGET_HOME/.kivy/config.ini"
-
+    sed -i '/^#%(name)s[[:space:]]*=[[:space:]]*probesysfs$/a waveshare = hidinput,/dev/input/event1' "$TARGET_HOME/.kivy/config.ini"
   chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.kivy"
+
+  # -----------------------------
+  # 2) X11: Force 1600x600 preferred mode
+  # The following allows the screen to turn on even if the RPi is first turned on while the screen is not powered
+  # -----------------------------
+  local XORG_DIR="/etc/X11/xorg.conf.d"
+  local XORG_FILE="$XORG_DIR/10-monitor.conf"
+  sudo mkdir -p "$XORG_DIR"
+
+  sudo tee "$XORG_FILE" >/dev/null <<'EOF'
+Section "Monitor"
+    Identifier "Waveshare-9.3"
+    # 1600x600 @ 60 Hz - from cvt on your system
+    Modeline "1600x600_60.00" 76.50 1600 1664 1824 2048  600 603 613 624 -hsync +vsync
+    Option "PreferredMode" "1600x600_60.00"
+EndSection
+
+Section "Device"
+    Identifier "Device0"
+    Driver "modesetting"
+EndSection
+
+Section "Screen"
+    Identifier "Screen0"
+    Monitor "Waveshare-9.3"
+EndSection
+EOF
+
+  # -----------------------------
+  # 3) Kernel fallback in /boot/firmware/config.txt
+  # -----------------------------
+  local BOOTCFG="/boot/firmware/config.txt"
+
+  # Ensure file exists
+  sudo touch "$BOOTCFG"
+
+  # Helper to set or append a key=value in config.txt (idempotent)
+  _set_cfg_kv () {
+    local key="$1" val="$2"
+    if sudo grep -qE "^[#[:space:]]*${key}=" "$BOOTCFG"; then
+      # replace existing (including commented)
+      sudo sed -i "s|^[#[:space:]]*${key}=.*|${key}=${val}|" "$BOOTCFG"
+    else
+      echo "${key}=${val}" | sudo tee -a "$BOOTCFG" >/dev/null
+    fi
+  }
+
+  _set_cfg_kv "hdmi_force_hotplug" "1"
+  _set_cfg_kv "hdmi_group" "2"
+  _set_cfg_kv "hdmi_mode" "87"
+  _set_cfg_kv "hdmi_cvt" "1600 600 60 6 0 0 0"
+
+  # -----------------------------
+  # 4) Early init: append video=… to cmdline exactly once
+  # -----------------------------
+  local CMDLINE="/boot/firmware/cmdline.txt"
+  sudo touch "$CMDLINE"
+
+  if ! sudo grep -q "video=HDMI-A-1:1600x600@60D" "$CMDLINE"; then
+    # cmdline.txt must be a single line; append token safely with a space
+    sudo sed -i 's/$/ video=HDMI-A-1:1600x600@60D/' "$CMDLINE"
+  fi
+
+  echo "Waveshare display configuration applied."
 }
 
 install_power_led() {
