@@ -171,31 +171,29 @@ configure_waveshare() {
 
   # -----------------------------
   # 2) X11: Force 1600x600 preferred mode
-  # The following allows the screen to turn on even if the RPi is first turned on while the screen is not powered
+  # The following (2-4) allows the screen to turn on even if the RPi is first turned on while the screen is not powered
   # -----------------------------
   local XORG_DIR="/etc/X11/xorg.conf.d"
   local XORG_FILE="$XORG_DIR/10-monitor.conf"
   sudo mkdir -p "$XORG_DIR"
 
   sudo tee "$XORG_FILE" >/dev/null <<'EOF'
-  Section "Monitor"
-      Identifier "Waveshare-9.3"
-      # 1600x600 @ 60 Hz - from cvt on your system
-      Modeline "1600x600_60.00" 76.50 1600 1664 1824 2048  600 603 613 624 -hsync +vsync
-      Option "PreferredMode" "1600x600_60.00"
-  EndSection
-  
-  Section "Device"
-      Identifier "Device0"
-      Driver "modesetting"
-  EndSection
-  
-  Section "Screen"
-      Identifier "Screen0"
-      Monitor "Waveshare-9.3"
-  EndSection
-  EOF
-  
+Section "Monitor"
+    Identifier "Waveshare-9.3"
+    Modeline "1600x600_60.00" 76.50 1600 1664 1824 2048  600 603 613 624 -hsync +vsync
+    Option "PreferredMode" "1600x600_60.00"
+EndSection
+
+Section "Device"
+    Identifier "Device0"
+    Driver "modesetting"
+EndSection
+
+Section "Screen"
+    Identifier "Screen0"
+    Monitor "Waveshare-9.3"
+EndSection
+EOF
   
   # -----------------------------
   # 3) Kernel fallback in /boot/firmware/config.txt
