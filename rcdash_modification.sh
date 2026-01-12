@@ -178,32 +178,33 @@ configure_waveshare() {
   sudo mkdir -p "$XORG_DIR"
 
   sudo tee "$XORG_FILE" >/dev/null <<'EOF'
-Section "Monitor"
-    Identifier "Waveshare-9.3"
-    # 1600x600 @ 60 Hz - from cvt on your system
-    Modeline "1600x600_60.00" 76.50 1600 1664 1824 2048  600 603 613 624 -hsync +vsync
-    Option "PreferredMode" "1600x600_60.00"
-EndSection
-
-Section "Device"
-    Identifier "Device0"
-    Driver "modesetting"
-EndSection
-
-Section "Screen"
-    Identifier "Screen0"
-    Monitor "Waveshare-9.3"
-EndSection
-EOF
-
+  Section "Monitor"
+      Identifier "Waveshare-9.3"
+      # 1600x600 @ 60 Hz - from cvt on your system
+      Modeline "1600x600_60.00" 76.50 1600 1664 1824 2048  600 603 613 624 -hsync +vsync
+      Option "PreferredMode" "1600x600_60.00"
+  EndSection
+  
+  Section "Device"
+      Identifier "Device0"
+      Driver "modesetting"
+  EndSection
+  
+  Section "Screen"
+      Identifier "Screen0"
+      Monitor "Waveshare-9.3"
+  EndSection
+  EOF
+  
+  
   # -----------------------------
   # 3) Kernel fallback in /boot/firmware/config.txt
   # -----------------------------
   local BOOTCFG="/boot/firmware/config.txt"
-
+  
   # Ensure file exists
   sudo touch "$BOOTCFG"
-
+  
   # Helper to set or append a key=value in config.txt (idempotent)
   _set_cfg_kv () {
     local key="$1" val="$2"
@@ -214,7 +215,14 @@ EOF
       echo "${key}=${val}" | sudo tee -a "$BOOTCFG" >/dev/null
     fi
   }
-
+  
+  # Insert a comment header (once) to document the HDMI settings
+  if ! sudo grep -q "^# Waveshare HDMI settings" "$BOOTCFG"; then
+    echo "" | sudo tee -a "$BOOTCFG" >/dev/null     # optional blank line for readability
+    echo "# Waveshare HDMI settings" | sudo tee -a "$BOOTCFG" >/dev/null
+  fi
+  
+  # Apply HDMI settings
   _set_cfg_kv "hdmi_force_hotplug" "1"
   _set_cfg_kv "hdmi_group" "2"
   _set_cfg_kv "hdmi_mode" "87"
