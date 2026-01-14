@@ -27,10 +27,10 @@ These are the steps performed.  You can also do these manually if desired.
   touch ~/.hushlogin  
   sudo mkdir -p /etc/systemd/system/getty@tty1.service.d  
   sudo nano /etc/systemd/system/getty@tty1.service.d/noclear.conf  
-    [Service]  
-    TTYVTDisallocate=no  
-    ExecStart=  
-    ExecStart=-/sbin/agetty --noclear --skip-login --nonewline --noissue --autologin lbmmiata --noclear %I $TERM  
+    *[Service]*  
+    *TTYVTDisallocate=no*  
+    *ExecStart=*  
+    *ExecStart=-/sbin/agetty --noclear --skip-login --nonewline --noissue --autologin lbmmiata --noclear %I $TERM*  
   sudo systemctl daemon-reexec  
   sudo systemctl daemon-reload  
 
