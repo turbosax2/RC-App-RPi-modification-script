@@ -24,22 +24,22 @@ These are the steps performed.  You can also do these manually if desired.
     Add this to the end of the line: *loglevel=0 vt.global_cursor_default=0*
 
 • This gets rid of some more text  
-  touch ~/.hushlogin  
-  sudo mkdir -p /etc/systemd/system/getty@tty1.service.d  
-  sudo nano /etc/systemd/system/getty@tty1.service.d/noclear.conf  
+  **touch ~/.hushlogin**  
+  **sudo mkdir -p /etc/systemd/system/getty@tty1.service.d**  
+  **sudo nano /etc/systemd/system/getty@tty1.service.d/noclear.conf**  
     *[Service]*  
     *TTYVTDisallocate=no*  
     *ExecStart=*  
     *ExecStart=-/sbin/agetty --noclear --skip-login --nonewline --noissue --autologin lbmmiata --noclear %I $TERM*  
-  sudo systemctl daemon-reexec  
-  sudo systemctl daemon-reload  
-
+  **sudo systemctl daemon-reexec**  
+  **sudo systemctl daemon-reload**  
+```
 • Splash screen  
   sudo apt-get install feh -y  
   nano ~/.xinitrc  
     Add this before xllvnc line  
       feh --fullscreen --hide-pointer --auto-zoom /home/lbmmiata/splash.png &  
-
+```
 • Disable some stuff to boot faster  
   sudo systemctl disable ModemManager  
   sudo systemctl disable bluetooth  
