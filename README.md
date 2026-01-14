@@ -15,7 +15,8 @@ This script is to be ran after installing RaceCapture on a RPi.
 These are the steps performed.  You can also do these manually if desired.  
 • Modify RC file to hide some text  
   nano ~/.bashrc  
-    Comment out this line: *#echo "Starting RaceCapture!"*  
+    Comment out this line: 
+    ```#echo "Starting RaceCapture!"```  
     Modify this line: *xinit -- -nocursor -dpms -s 0 >/dev/null 2>&1*  
 
 • Replace/remove some text during bootup  
