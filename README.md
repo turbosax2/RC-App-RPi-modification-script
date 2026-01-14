@@ -20,7 +20,7 @@ These are the steps performed.  You can also do these manually if desired.
 
 • Replace/remove some text during bootup  
   **sudo nano /boot/firmware/cmdline.txt**  
-    Change this tty1 to tty3: *console=tty3*
+    Change this tty1 to tty3: *console=tty3*  
     Add this to the end of the line: *loglevel=0 vt.global_cursor_default=0*
 
 • This gets rid of some more text  
